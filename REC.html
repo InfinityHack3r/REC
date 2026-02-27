@@ -1997,6 +1997,17 @@ function stopCapture() {
   btnPause.disabled = true;
 }
 
+// --- Guard against accidental tab close during recording ---
+window.addEventListener('beforeunload', e => {
+  if (recorder && recorder.state !== 'inactive') {
+    // Attempt a clean stop so onstop fires and disk stream gets closed
+    recorder.stop();
+    // Trigger browser's "Leave site?" dialog
+    e.preventDefault();
+    return (e.returnValue = '');
+  }
+});
+
 // --- Timer ---
 function startTimer() { timerInterval = setInterval(updateTimer, 500); }
 function stopTimer() { clearInterval(timerInterval); }
