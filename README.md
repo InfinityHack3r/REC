@@ -20,6 +20,13 @@ Single HTML file. Open it and go.
 - **Pause / Resume** during recording
 - **Timer** overlay while recording
 - Built-in playback + download for each recording
+- **Save to Disk** — stream chunks directly to a local file via the File System Access API (Chrome/Edge only). Zero RAM usage during recording, no separate download step needed.
+
+### Safety
+
+- If you close or refresh the tab while recording, the browser shows a **"Leave site?"** warning
+- Stopping is triggered automatically on exit so the recorder attempts a clean shutdown
+- In Save to Disk mode this gives the file stream the best chance of closing properly; WebM files are also more recoverable than MP4 if the stream is cut short
 
 ### Overlay layers (burned into video)
 
@@ -68,6 +75,7 @@ Best experience: latest **Chrome / Edge**.
 - System audio capture varies by OS and share type — tab sharing is most reliable.
 - `canvas.captureStream` required for overlay burn-in pipeline.
 - `AudioContext` + `AnalyserNode` required for level meters.
+- `showSaveFilePicker` (File System Access API) required for Save to Disk — Chrome/Edge only.
 
 Firefox and Safari may work for basic screen capture but overlay, meter, and audio features may differ.
 
@@ -87,13 +95,15 @@ Firefox and Safari may work for basic screen capture but overlay, meter, and aud
 | MP4 unavailable | Browser may not support the H.264 MediaRecorder MIME type. Use WebM. |
 | Camera overlay shows "No feed" | Click "Pick camera" to re-request access, or check that no other app is using the camera. |
 | Audio meter stuck at -∞ | No audio source connected. Enable System Audio or Microphone and re-capture. |
+| Save to Disk toggle does nothing | Browser does not support the File System Access API. Use Chrome or Edge. |
+| File corrupt after forced close | Use WebM format — it is more recoverable than MP4 when a stream is cut short. |
 
 ## Tech stack
 
 - Static HTML + CSS + vanilla JavaScript
 - No dependencies, no build tool, no framework
 - Google Fonts: [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono), [Rajdhani](https://fonts.google.com/specimen/Rajdhani)
-- Web APIs: `MediaRecorder`, `getDisplayMedia`, `getUserMedia`, `AudioContext`, `AnalyserNode`, `Canvas2D`, `captureStream`
+- Web APIs: `MediaRecorder`, `getDisplayMedia`, `getUserMedia`, `AudioContext`, `AnalyserNode`, `Canvas2D`, `captureStream`, `FileSystemWritableFileStream`
 
 ## Development
 
