@@ -296,6 +296,7 @@
   }
 
   .info-banner strong { font-weight: 700; }
+  .info-banner.success { background: rgba(0,230,118,0.06); border-color: rgba(0,230,118,0.25); color: var(--green); }
 
   /* ===== Controls ===== */
   .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
@@ -930,6 +931,10 @@
       <label>Microphone</label>
       <div class="toggle" id="micToggle" role="button" tabindex="0"></div>
     </div>
+    <div class="setting-group toggle-wrap">
+      <label>Save to Disk</label>
+      <div class="toggle" id="diskSaveToggle" role="button" tabindex="0"></div>
+    </div>
   </div>
 
   <div class="audio-sources" id="audioSources">
@@ -1009,6 +1014,7 @@ const formatSelect = $('formatSelect');
 const qualitySelect = $('qualitySelect');
 const sysAudioToggle = $('sysAudioToggle');
 const micToggle = $('micToggle');
+const diskSaveToggle = $('diskSaveToggle');
 const audioSources = $('audioSources');
 const micDeviceList = $('micDeviceList');
 const videoSources = $('videoSources');
@@ -1043,6 +1049,8 @@ let wantMic = false;
 let selectedMicId = null;
 let selectedVideoId = null;
 let savedSysAudioPref = true;
+let saveToDisk = false;
+let diskWritable = null;
 let compositeCanvas = null;
 let compositeCtx = null;
 let compositeSourceVideo = null;
@@ -1068,6 +1076,18 @@ setupToggle(micToggle, false, v => {
   wantMic = v;
   if (v) loadMicDevices();
   audioSources.classList.toggle('visible', v);
+});
+
+setupToggle(diskSaveToggle, false, v => {
+  if (v && !window.showSaveFilePicker) {
+    diskSaveToggle.classList.remove('on');
+    saveToDisk = false;
+    infoBanner.className = 'info-banner';
+    infoBanner.style.display = 'block';
+    infoBanner.innerHTML = '<strong>Save to Disk not supported</strong> — this browser does not support the File System Access API. Use Chrome or Edge.';
+    return;
+  }
+  saveToDisk = v;
 });
 
 sourceSelect.addEventListener('change', () => {
@@ -1822,12 +1842,28 @@ btnCapture.addEventListener('click', async () => {
 });
 
 // --- Record ---
-btnRecord.addEventListener('click', () => {
+btnRecord.addEventListener('click', async () => {
   if (!combinedStream) return;
   chunks = [];
 
   const mimeType = getMimeType();
   const bitrate = parseInt(qualitySelect.value);
+  const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+
+  // --- Save to disk: open file picker before recording starts ---
+  if (saveToDisk) {
+    try {
+      const fileHandle = await window.showSaveFilePicker({
+        suggestedName: `recording-${ts}.${ext}`,
+        types: [{ description: 'Video file', accept: { 'video/*': [`.${ext}`] } }]
+      });
+      diskWritable = await fileHandle.createWritable();
+      diskWritable._name = fileHandle.name;
+    } catch (e) {
+      return; // user cancelled picker
+    }
+  }
 
   try {
     recorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: bitrate, audioBitsPerSecond: 128000 });
@@ -1836,27 +1872,41 @@ btnRecord.addEventListener('click', () => {
     catch (e2) { recorder = new MediaRecorder(combinedStream); }
   }
 
-  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-
-  recorder.onstop = () => {
-    const usedMime = recorder.mimeType || 'video/webm';
-    const blob = new Blob(chunks, { type: usedMime });
-    const ext = usedMime.includes('mp4') ? 'mp4' : 'webm';
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-
-    recordings.unshift({
-      id: Date.now(),
-      name: `recording-${ts}.${ext}`,
-      blob,
-      url: URL.createObjectURL(blob),
-      size: blob.size,
-      duration: timerBadge.textContent,
-      date: new Date()
-    });
-
-    renderRecordings();
-    resetRecordingUI();
-  };
+  if (saveToDisk) {
+    // Stream chunks straight to disk
+    recorder.ondataavailable = async e => {
+      if (e.data.size > 0 && diskWritable) await diskWritable.write(e.data);
+    };
+    recorder.onstop = async () => {
+      const name = diskWritable ? diskWritable._name : 'file';
+      try { if (diskWritable) { await diskWritable.close(); diskWritable = null; } } catch(e) {}
+      resetRecordingUI();
+      infoBanner.className = 'info-banner success';
+      infoBanner.style.display = 'block';
+      infoBanner.innerHTML = `<strong>✓ Saved to disk</strong> — <strong>${name}</strong> written directly to your chosen location`;
+      setTimeout(() => { infoBanner.style.display = 'none'; infoBanner.className = 'info-banner'; }, 6000);
+    };
+  } else {
+    // In-memory: accumulate chunks, show in recordings list
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = () => {
+      const usedMime = recorder.mimeType || 'video/webm';
+      const blob = new Blob(chunks, { type: usedMime });
+      const blobExt = usedMime.includes('mp4') ? 'mp4' : 'webm';
+      const blobTs = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      recordings.unshift({
+        id: Date.now(),
+        name: `recording-${blobTs}.${blobExt}`,
+        blob,
+        url: URL.createObjectURL(blob),
+        size: blob.size,
+        duration: timerBadge.textContent,
+        date: new Date()
+      });
+      renderRecordings();
+      resetRecordingUI();
+    };
+  }
 
   recorder.start(500);
   isPaused = false;
@@ -1923,6 +1973,8 @@ function stopCapture() {
   stopTimer();
   stopAudioMeter();
   stopBurnInPipeline();
+  // Close any dangling disk writable stream
+  if (diskWritable) { diskWritable.close().catch(() => {}); diskWritable = null; }
   // Stop any camera overlay streams
   layers.forEach(l => { if (l.camStream) { l.camStream.getTracks().forEach(t => t.stop()); l.camStream = null; } });
   [displayStream, micStream, combinedStream].forEach(s => { if (s) s.getTracks().forEach(t => t.stop()); });
