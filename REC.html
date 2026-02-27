@@ -1,0 +1,1991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screen Recorder</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #05070d;
+    --surface: #0a0e1a;
+    --surface-2: #0d1220;
+    --border: #1a2240;
+    --border-bright: #1e3a6e;
+    --accent: #4a9eff;
+    --accent-bright: #6fb8ff;
+    --green: #00e676;
+    --red: #ff1744;
+    --red-dim: #c62828;
+    --yellow: #ffd600;
+    --text: #c8d8f0;
+    --text-dim: #4a6080;
+    --mono: 'Share Tech Mono', monospace;
+    --head: 'Rajdhani', sans-serif;
+    --radius: 4px;
+  }
+
+  body {
+    font-family: var(--mono);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  header {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    background: #000;
+    border-bottom: 2px solid var(--border-bright);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  header h1 {
+    font-family: var(--head);
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent-bright);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1;
+  }
+
+  header h1 .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 12px rgba(0, 230, 118, 0.35);
+  }
+
+  header h1 .dot.recording { animation: pulse-red 1s ease-in-out infinite; }
+  header p {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 0.2rem;
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* ===== Audio Guide Panel ===== */
+  .audio-guide {
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .audio-guide-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+  }
+
+  .audio-guide-header:hover { background: var(--surface-2); }
+
+  .audio-guide-header h3 {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .audio-guide-header .chevron {
+    color: var(--text-dim);
+    transition: transform 0.2s;
+    font-size: 0.8rem;
+  }
+
+  .audio-guide-header .chevron.open { transform: rotate(180deg); }
+
+  .audio-guide-body {
+    display: none;
+    padding: 0 18px 18px;
+  }
+
+  .audio-guide-body.open { display: block; }
+
+  .guide-section {
+    margin-top: 14px;
+  }
+
+  .guide-section h4 {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text);
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .guide-section h4 .badge {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border: 1px solid transparent;
+  }
+
+  .badge-green { background: rgba(0,230,118,0.15); color: var(--green); border-color: rgba(0,230,118,0.3); }
+  .badge-yellow { background: rgba(255,214,0,0.15); color: var(--yellow); border-color: rgba(255,214,0,0.3); }
+  .badge-red { background: rgba(255,23,68,0.15); color: var(--red); border-color: rgba(255,23,68,0.3); }
+
+  .guide-steps {
+    list-style: none;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+
+  .guide-steps li {
+    font-size: 0.8rem; color: var(--text-dim);
+    line-height: 1.5;
+    padding-left: 20px;
+    position: relative;
+  }
+
+  .guide-steps li::before {
+    content: attr(data-step);
+    position: absolute; left: 0;
+    font-family: var(--mono);
+    font-weight: 700; font-size: 0.7rem;
+    color: var(--accent);
+  }
+
+  .guide-steps li strong { color: var(--text); font-weight: 600; }
+
+  .guide-note {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(255, 214, 0, 0.05);
+    border: 1px solid rgba(255, 214, 0, 0.25);
+    border-radius: 3px;
+    font-size: 0.78rem; color: var(--yellow);
+    line-height: 1.5;
+  }
+
+  .guide-table {
+    margin-top: 10px;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+
+  .guide-table th, .guide-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .guide-table th {
+    color: var(--text-dim);
+    font-weight: 600;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .guide-table td { color: var(--text); }
+  .guide-table td.yes { color: var(--green); }
+  .guide-table td.no { color: var(--red); }
+
+  /* ===== Preview ===== */
+  .preview-container {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius);
+    overflow: hidden;
+    aspect-ratio: 16 / 9;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .preview-container.active { border-color: var(--green); box-shadow: 0 0 0 1px rgba(0,230,118,0.2); }
+  .preview-container.rec { border-color: var(--red); box-shadow: 0 0 0 1px rgba(255,23,68,0.2); }
+
+  .preview-placeholder { text-align: center; color: var(--text-dim); }
+  .preview-placeholder svg { width: 48px; height: 48px; stroke: var(--border-bright); margin-bottom: 12px; }
+  .preview-placeholder p { font-size: 0.85rem; }
+
+  video#preview { width: 100%; height: 100%; object-fit: contain; display: none; background: #000; }
+
+  .rec-badge {
+    display: none; position: absolute; top: 16px; left: 16px;
+    background: rgba(255, 23, 68, 0.15);
+    color: var(--red);
+    border: 1px solid rgba(255, 23, 68, 0.3);
+    font-family: var(--mono);
+    font-size: 0.7rem; font-weight: 700;
+    padding: 4px 10px; border-radius: 3px; letter-spacing: 2px;
+    align-items: center; gap: 6px;
+    animation: pulse-badge 1.5s ease-in-out infinite; z-index: 5;
+    text-transform: uppercase;
+  }
+
+  .rec-badge .rec-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: pulse-dot 1s ease-in-out infinite; }
+
+  .timer-badge {
+    display: none; position: absolute; top: 16px; right: 16px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid var(--border-bright);
+    color: var(--accent-bright);
+    font-family: var(--mono);
+    font-size: 0.8rem; font-weight: 600;
+    padding: 6px 12px; border-radius: 3px; z-index: 5;
+    letter-spacing: 1px;
+  }
+
+  .audio-status {
+    position: absolute; bottom: 16px; left: 16px;
+    background: rgba(0,0,0,0.85);
+    border: 1px solid var(--border-bright);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.7rem; font-weight: 600;
+    padding: 5px 10px; border-radius: 3px; z-index: 5;
+    display: none; align-items: center; gap: 6px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .audio-status .audio-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .audio-status .audio-dot.has-audio { background: var(--green); }
+  .audio-status .audio-dot.no-audio { background: var(--yellow); }
+
+  /* ===== Info banner ===== */
+  .info-banner {
+    display: none;
+    background: rgba(255, 214, 0, 0.06);
+    border: 1px solid rgba(255, 214, 0, 0.25);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 0.82rem; color: var(--yellow); line-height: 1.5;
+  }
+
+  .info-banner strong { font-weight: 700; }
+
+  /* ===== Controls ===== */
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  .btn {
+    font-family: var(--head);
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 10px 18px;
+    border: 1px solid var(--border-bright);
+    border-radius: 3px;
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+
+  .btn:hover { background: rgba(74,158,255,0.12); border-color: var(--accent); color: var(--accent-bright); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #000; }
+  .btn.primary:hover { background: var(--accent-bright); color: #000; }
+  .btn.success { background: rgba(0,230,118,0.15); border-color: rgba(0,230,118,0.35); color: var(--green); }
+  .btn.success:hover { border-color: var(--green); color: #d5ffe9; }
+  .btn.stop { background: rgba(255,23,68,0.12); border-color: rgba(255,23,68,0.35); color: var(--red); }
+  .btn.stop:hover { border-color: var(--red); color: #fff; }
+
+  /* ===== Settings ===== */
+  .settings {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: 3px;
+    padding: 12px 14px;
+  }
+  .setting-group { display: flex; align-items: center; gap: 8px; }
+  .setting-group label {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .setting-group select {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    background: #000;
+    color: var(--accent-bright);
+    border: 1px solid var(--border-bright);
+    border-radius: 3px;
+    padding: 8px 12px; outline: none; cursor: pointer;
+    letter-spacing: 1px;
+  }
+
+  .setting-group select:focus { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(74,158,255,0.2); }
+  .setting-group select option { background: var(--surface); color: var(--text); }
+
+  .toggle-wrap { display: flex; align-items: center; gap: 8px; }
+
+  .toggle {
+    position: relative;
+    width: 40px; height: 22px;
+    background: var(--border);
+    border: 1px solid var(--border-bright);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute; top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    background: var(--text-dim); border-radius: 50%;
+    transition: transform 0.2s;
+  }
+
+  .toggle.on { background: rgba(74,158,255,0.2); border-color: var(--accent); }
+  .toggle.on::after { transform: translateX(18px); background: var(--accent-bright); }
+
+  .audio-sources { display: none; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .audio-sources.visible { display: flex; }
+
+  .device-sources { display: none; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .device-sources.visible { display: flex; }
+
+  .audio-chip {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 6px 14px;
+    border: 1px solid var(--border-bright);
+    border-radius: 2px;
+    background: var(--surface); color: var(--text-dim);
+    cursor: pointer; transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .audio-chip:hover { border-color: var(--accent); color: var(--accent-bright); }
+  .audio-chip.selected { border-color: var(--green); color: var(--green); background: rgba(0,230,118,0.08); }
+
+  /* ===== Audio Meter ===== */
+  .preview-with-meter {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .preview-with-meter .preview-container {
+    flex: 1;
+    min-width: 0;
+  }
+  .audio-meter-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    width: 88px;
+    min-height: 180px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius);
+    padding: 8px 7px 7px;
+  }
+  .meter-top-row {
+    display: flex;
+    justify-content: space-around;
+    gap: 4px;
+  }
+  .meter-db-val {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+    text-align: center;
+    transition: color 0.1s;
+    flex: 1;
+    white-space: nowrap;
+  }
+  .meter-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    gap: 4px;
+    align-items: stretch;
+  }
+  /* Shared scale column */
+  .meter-scale {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-shrink: 0;
+    width: 18px;
+  }
+  .meter-scale span {
+    font-family: var(--mono);
+    font-size: 0.48rem;
+    color: var(--text-dim);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  /* Vertical bar */
+  .meter-bar-container {
+    position: relative;
+    flex: 1;
+    min-width: 14px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: linear-gradient(to top,
+      #00e676 0%, #00c853 50%, #ffd600 68%, #ff6d00 84%, #ff1744 100%
+    );
+  }
+  .meter-bar-overlay {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    background: var(--border);
+    transition: height 0.05s linear;
+    height: 100%;
+  }
+  .meter-bar-peak {
+    position: absolute;
+    left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 1px;
+    z-index: 2;
+    bottom: 0%;
+  }
+  .meter-bottom-row {
+    display: flex;
+    justify-content: space-around;
+  }
+  .meter-ch-label {
+    font-family: var(--mono);
+    font-size: 0.52rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: center;
+    flex: 1;
+  }
+  .meter-ch-label.active-sys { color: var(--accent); }
+  .meter-ch-label.active-mic { color: var(--green); }
+  .meter-title {
+    font-family: var(--mono);
+    font-size: 0.5rem;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  /* ===== Layers Panel ===== */
+  .preview-container.positioning { cursor: crosshair; }
+
+  .layers-panel {
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .layers-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .layers-title {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--accent);
+  }
+
+  .layers-add-row { display: flex; gap: 8px; align-items: center; }
+
+  .layers-add-row select {
+    font-family: var(--mono); font-size: 0.76rem;
+    background: #000; color: var(--accent-bright);
+    border: 1px solid var(--border-bright); border-radius: 3px;
+    padding: 6px 10px; outline: none; cursor: pointer;
+  }
+
+  .layers-add-row select:focus { border-color: var(--accent); }
+
+  .layers-empty {
+    padding: 16px 18px;
+    font-size: 0.78rem; color: var(--text-dim);
+    letter-spacing: 1px; text-align: center;
+  }
+
+  .layer-card {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  .layer-card:last-child { border-bottom: none; }
+  .layer-card.active { background: rgba(74,158,255,0.06); border-left: 3px solid var(--accent); }
+  .layer-card:not(.active) { border-left: 3px solid transparent; }
+
+  .layer-card-left { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 2px; }
+
+  .layer-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--border-bright);
+    background: var(--surface-2);
+    cursor: pointer; flex-shrink: 0;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .layer-dot:hover { border-color: var(--accent); }
+  .layer-dot.active { background: var(--accent); border-color: var(--accent-bright); box-shadow: 0 0 8px rgba(74,158,255,0.5); }
+
+  .layer-type-badge {
+    font-family: var(--mono); font-size: 0.6rem; font-weight: 700;
+    padding: 2px 6px; border-radius: 2px; letter-spacing: 1px;
+    text-transform: uppercase; border: 1px solid transparent;
+    white-space: nowrap;
+  }
+
+  .badge-blue  { background: rgba(74,158,255,0.15);  color: var(--accent);  border-color: rgba(74,158,255,0.3); }
+  .badge-yellow{ background: rgba(255,214,0,0.15);    color: var(--yellow);  border-color: rgba(255,214,0,0.3); }
+  .badge-green { background: rgba(0,230,118,0.15);    color: var(--green);   border-color: rgba(0,230,118,0.3); }
+
+  .layer-card-body {
+    flex: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+
+  .layer-text-input {
+    font-family: var(--mono); font-size: 0.76rem;
+    background: #000; color: var(--accent-bright);
+    border: 1px solid var(--border-bright); border-radius: 3px;
+    padding: 5px 9px; outline: none; min-width: 130px; max-width: 200px;
+    letter-spacing: 1px;
+  }
+
+  .layer-text-input:focus { border-color: var(--accent); }
+
+  .layer-img-btn {
+    font-family: var(--mono); font-size: 0.7rem; cursor: pointer;
+    background: rgba(74,158,255,0.08); color: var(--accent-bright);
+    border: 1px solid var(--border-bright); border-radius: 3px;
+    padding: 5px 10px; letter-spacing: 1px; display: inline-flex;
+    align-items: center; gap: 4px; white-space: nowrap;
+    transition: border-color 0.15s;
+  }
+
+  .layer-img-btn:hover { border-color: var(--accent); }
+
+  .layer-field-group { display: flex; align-items: center; gap: 6px; }
+
+  .layer-field-label {
+    font-size: 0.62rem; color: var(--text-dim);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .layer-color-pick {
+    width: 28px; height: 24px; padding: 1px 2px;
+    border: 1px solid var(--border-bright); border-radius: 3px;
+    background: #000; cursor: pointer;
+  }
+
+  .layer-size-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 80px; height: 4px; background: var(--border);
+    border-radius: 2px; outline: none; cursor: pointer;
+  }
+
+  .layer-size-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent-bright); cursor: pointer;
+  }
+
+  .layer-size-val {
+    font-size: 0.7rem; color: var(--accent);
+    letter-spacing: 1px; min-width: 30px;
+  }
+
+  .layer-opacity-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 70px; height: 4px; background: var(--border);
+    border-radius: 2px; outline: none; cursor: pointer;
+  }
+
+  .layer-opacity-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent-bright); cursor: pointer;
+  }
+
+  .layer-card-actions {
+    display: flex; flex-direction: column; gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .layer-btn {
+    font-family: var(--mono); font-size: 0.64rem; font-weight: 700;
+    letter-spacing: 1px; text-transform: uppercase;
+    padding: 4px 8px; border-radius: 2px; cursor: pointer;
+    border: 1px solid var(--border-bright);
+    background: var(--surface-2); color: var(--text-dim);
+    transition: all 0.15s; white-space: nowrap;
+  }
+
+  .layer-btn:hover { border-color: var(--accent); color: var(--accent-bright); }
+  .layer-btn.vis-off { opacity: 0.45; }
+  .layer-btn.del-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,23,68,0.08); }
+
+  .layers-click-hint {
+    font-size: 0.68rem; color: var(--text-dim); letter-spacing: 1px;
+    padding: 6px 14px 8px;
+    text-align: center;
+  }
+
+  /* ===== Recordings ===== */
+  .recordings { display: flex; flex-direction: column; gap: 10px; }
+
+  .recordings h3 {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .recordings h3::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-bright);
+  }
+
+  .recording-item {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    transition: border-color 0.2s;
+  }
+
+  .recording-item:hover { border-color: var(--accent); }
+  .recording-item .info { flex: 1; min-width: 0; }
+  .recording-item .info .name {
+    font-family: var(--head);
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--accent-bright);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .recording-item .info .meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 2px; font-family: var(--mono); letter-spacing: 1px; }
+  .recording-item .actions { display: flex; gap: 8px; }
+
+  .btn-sm {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border: 1px solid var(--border-bright);
+    border-radius: 2px;
+    background: rgba(74,158,255,0.12);
+    color: var(--accent-bright);
+    cursor: pointer; transition: all 0.2s;
+  }
+
+  .btn-sm:hover { border-color: var(--accent-bright); color: #d5e9ff; }
+  .btn-sm.danger:hover { border-color: var(--red); color: var(--red); background: rgba(255,23,68,0.12); }
+
+  footer {
+    position: relative; z-index: 1;
+    background: var(--red-dim);
+    border-top: 1px solid var(--red);
+    padding: 0.45rem 1rem;
+    text-align: center;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #fff;
+    font-family: var(--mono);
+  }
+
+  @keyframes pulse-red { 0%, 100% { box-shadow: 0 0 12px rgba(255, 23, 68, 0.35); background: var(--red); } 50% { box-shadow: 0 0 24px rgba(255, 23, 68, 0.35); background: var(--red); } }
+  @keyframes pulse-badge { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  @media (max-width: 860px) {
+    header {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 1rem 1.25rem;
+    }
+    header h1 { font-size: 1.45rem; }
+    main { padding: 1.25rem; }
+    .controls { flex-direction: column; }
+    .controls .btn { width: 100%; justify-content: center; }
+    .settings { flex-direction: column; align-items: flex-start; }
+    .recording-item { flex-direction: column; align-items: flex-start; }
+    .recording-item .actions { width: 100%; }
+    .guide-table { font-size: 0.7rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot" id="headerDot"></span> REC</h1>
+  <p>Browser-based screen recorder — nothing leaves your machine</p>
+</header>
+
+<main>
+
+  <!-- Audio Guide -->
+  <div class="audio-guide">
+    <div class="audio-guide-header" id="guideToggle">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        How to capture desktop audio
+      </h3>
+      <span class="chevron" id="guideChevron">▼</span>
+    </div>
+    <div class="audio-guide-body" id="guideBody">
+
+      <div class="guide-section">
+        <h4>Chrome / Edge <span class="badge badge-green">Best support</span></h4>
+        <ol class="guide-steps">
+          <li data-step="1.">Click <strong>Start Capture</strong> below</li>
+          <li data-step="2.">In the share dialog, choose what to share (tab, window, or entire screen)</li>
+          <li data-step="3."><strong>Look for the audio checkbox at the bottom of the dialog</strong> — this is the step most people miss!</li>
+          <li data-step="4.">For a <strong>tab</strong>: tick <strong>"Also share tab audio"</strong></li>
+          <li data-step="5.">For <strong>entire screen</strong>: tick <strong>"Also share system audio"</strong> (Windows/ChromeOS)</li>
+          <li data-step="6.">Click <strong>Share</strong></li>
+        </ol>
+      </div>
+
+      <table class="guide-table">
+        <thead>
+          <tr>
+            <th>Share Type</th>
+            <th>Audio</th>
+            <th>Checkbox Label</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Browser Tab</td>
+            <td class="yes">✓ Tab audio</td>
+            <td>"Also share tab audio"</td>
+          </tr>
+          <tr>
+            <td>Entire Screen</td>
+            <td class="no">⚠ Buggy in Chrome (may fail)</td>
+            <td>"Also share system audio"</td>
+          </tr>
+          <tr>
+            <td>Window</td>
+            <td class="no">✗ No audio available</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="guide-note">
+        <strong>Known Chrome bug:</strong> Sharing an "Entire Screen" with system audio ticked can fail with "Could not start audio source". This is a Chromium issue, not a problem with this recorder. If it happens, the recorder will automatically retry without audio. For reliable audio, <strong>share a browser tab</strong> instead — tab audio works every time. Alternatively, enable the <strong>Microphone</strong> toggle to capture your mic regardless of share type.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Preview + Audio Meter (side by side) -->
+  <div class="preview-with-meter">
+    <div class="preview-container" id="previewContainer">
+      <div class="preview-placeholder" id="placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <p>Click <strong>Start Capture</strong> to share your screen</p>
+      </div>
+      <video id="preview" autoplay muted playsinline></video>
+      <div class="rec-badge" id="recBadge"><span class="rec-dot"></span>REC</div>
+      <div class="timer-badge" id="timerBadge">00:00</div>
+      <div class="audio-status" id="audioStatus">
+        <span class="audio-dot" id="audioDot"></span>
+        <span id="audioStatusText"></span>
+      </div>
+    </div>
+
+    <!-- Vertical Audio Level Meter (dual: system + mic) -->
+    <div class="audio-meter-panel" id="audioMeterPanel">
+      <div class="meter-top-row">
+        <span class="meter-db-val" id="meterDbSys">-&#x221e;</span>
+        <span class="meter-db-val" id="meterDbMic">-&#x221e;</span>
+      </div>
+      <div class="meter-body">
+        <div class="meter-scale">
+          <span>0</span><span>-6</span><span>-12</span><span>-18</span><span>-24</span><span>-36</span><span>-60</span>
+        </div>
+        <div class="meter-bar-container">
+          <div class="meter-bar-overlay" id="meterOverlaySys"></div>
+          <div class="meter-bar-peak" id="meterPeakSys"></div>
+        </div>
+        <div class="meter-bar-container">
+          <div class="meter-bar-overlay" id="meterOverlayMic"></div>
+          <div class="meter-bar-peak" id="meterPeakMic"></div>
+        </div>
+      </div>
+      <div class="meter-bottom-row">
+        <span class="meter-ch-label" id="meterLabelSys">SYS</span>
+        <span class="meter-ch-label" id="meterLabelMic">MIC</span>
+      </div>
+      <span class="meter-title">AUDIO</span>
+    </div>
+  </div>
+
+  <!-- Post-capture info banner -->
+  <div class="info-banner" id="infoBanner"></div>
+
+  <!-- Settings -->
+  <div class="settings">
+    <div class="setting-group">
+      <label>Source</label>
+      <select id="sourceSelect">
+        <option value="screen" selected>Screen</option>
+        <option value="camera">Camera / Device</option>
+      </select>
+    </div>
+    <div class="setting-group">
+      <label>Format</label>
+      <select id="formatSelect">
+        <option value="webm">WebM (VP9)</option>
+        <option value="mp4">MP4 (H.264)</option>
+      </select>
+    </div>
+    <div class="setting-group">
+      <label>Quality</label>
+      <select id="qualitySelect">
+        <option value="2500000">Medium (2.5 Mbps)</option>
+        <option value="5000000" selected>High (5 Mbps)</option>
+        <option value="10000000">Ultra (10 Mbps)</option>
+      </select>
+    </div>
+    <div class="setting-group toggle-wrap">
+      <label>System Audio</label>
+      <div class="toggle on" id="sysAudioToggle" role="button" tabindex="0"></div>
+    </div>
+    <div class="setting-group toggle-wrap">
+      <label>Microphone</label>
+      <div class="toggle" id="micToggle" role="button" tabindex="0"></div>
+    </div>
+  </div>
+
+  <div class="audio-sources" id="audioSources">
+    <label style="font-size:0.8rem; color:var(--text-dim);">Mic:</label>
+    <div id="micDeviceList" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+  </div>
+
+  <div class="device-sources" id="videoSources">
+    <label style="font-size:0.8rem; color:var(--text-dim);">Camera:</label>
+    <div id="videoDeviceList" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+  </div>
+
+  <!-- Overlay Layers -->
+  <div class="layers-panel" id="layersPanel">
+    <div class="layers-header">
+      <span class="layers-title">// Overlay Layers</span>
+      <div class="layers-add-row">
+        <select id="newLayerType">
+          <option value="text">Text</option>
+          <option value="camera">Camera Overlay</option>
+          <option value="image">Image</option>
+        </select>
+        <button class="btn-sm" id="btnAddLayer">+ Add Layer</button>
+      </div>
+    </div>
+    <div id="layersList"></div>
+    <div class="layers-click-hint" id="layersClickHint">Select a layer above, then click the preview to position it</div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn success" id="btnCapture">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 16 21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Start Capture
+    </button>
+    <button class="btn primary" id="btnRecord" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+      Record
+    </button>
+    <button class="btn stop" id="btnStop" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      Stop
+    </button>
+    <button class="btn" id="btnPause" disabled>Pause</button>
+  </div>
+
+  <!-- Recordings -->
+  <div class="recordings" id="recordingsSection" style="display:none;">
+    <h3>Recordings</h3>
+    <div id="recordingsList"></div>
+  </div>
+</main>
+
+<footer>
+  All processing happens locally in your browser &middot; Zero data uploaded
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const preview = $('preview');
+const placeholder = $('placeholder');
+const previewContainer = $('previewContainer');
+const headerDot = $('headerDot');
+const recBadge = $('recBadge');
+const timerBadge = $('timerBadge');
+const audioStatus = $('audioStatus');
+const audioDot = $('audioDot');
+const audioStatusText = $('audioStatusText');
+const infoBanner = $('infoBanner');
+const btnCapture = $('btnCapture');
+const btnRecord = $('btnRecord');
+const btnStop = $('btnStop');
+const btnPause = $('btnPause');
+const sourceSelect = $('sourceSelect');
+const formatSelect = $('formatSelect');
+const qualitySelect = $('qualitySelect');
+const sysAudioToggle = $('sysAudioToggle');
+const micToggle = $('micToggle');
+const audioSources = $('audioSources');
+const micDeviceList = $('micDeviceList');
+const videoSources = $('videoSources');
+const videoDeviceList = $('videoDeviceList');
+const recordingsSection = $('recordingsSection');
+const recordingsList = $('recordingsList');
+const guideToggle = $('guideToggle');
+const guideChevron = $('guideChevron');
+const guideBody = $('guideBody');
+
+// --- Guide toggle ---
+guideToggle.addEventListener('click', () => {
+  const open = guideBody.classList.toggle('open');
+  guideChevron.classList.toggle('open', open);
+});
+
+// --- State ---
+let displayStream = null;
+let combinedStream = null;
+let micStream = null;
+let audioContext = null;
+let recorder = null;
+let chunks = [];
+let recordings = [];
+let timerInterval = null;
+let recordStartTime = 0;
+let pauseOffset = 0;
+let isPaused = false;
+let captureSource = 'screen';
+let wantSysAudio = true;
+let wantMic = false;
+let selectedMicId = null;
+let selectedVideoId = null;
+let savedSysAudioPref = true;
+let compositeCanvas = null;
+let compositeCtx = null;
+let compositeSourceVideo = null;
+let compositeStream = null;
+let compositeRaf = null;
+let layers = [];
+let nextLayerId = 1;
+let activeLayerId = null;
+let meterAnimFrame = null;
+let meterAnalyserSys = null;
+let meterAnalyserMic = null;
+
+// --- Toggle helpers ---
+function setupToggle(el, initial, onChange) {
+  el.classList.toggle('on', initial);
+  const handler = () => { el.classList.toggle('on'); onChange(el.classList.contains('on')); };
+  el.addEventListener('click', handler);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(); } });
+}
+
+setupToggle(sysAudioToggle, true, v => wantSysAudio = v);
+setupToggle(micToggle, false, v => {
+  wantMic = v;
+  if (v) loadMicDevices();
+  audioSources.classList.toggle('visible', v);
+});
+
+sourceSelect.addEventListener('change', () => {
+  captureSource = sourceSelect.value;
+  updateCaptureModeUI();
+});
+updateCaptureModeUI();
+
+// --- Layer system init ---
+renderLayersList();
+document.getElementById('btnAddLayer').addEventListener('click', async () => {
+  await addLayer(document.getElementById('newLayerType').value);
+});
+
+// --- Mic enumeration ---
+async function loadMicDevices() {
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+    tmp.getTracks().forEach(t => t.stop());
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === 'audioinput');
+    micDeviceList.innerHTML = '';
+    mics.forEach((mic, i) => {
+      const chip = document.createElement('button');
+      chip.className = 'audio-chip' + (i === 0 ? ' selected' : '');
+      chip.textContent = mic.label || `Microphone ${i + 1}`;
+      chip.addEventListener('click', () => {
+        micDeviceList.querySelectorAll('.audio-chip').forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        selectedMicId = mic.deviceId;
+      });
+      micDeviceList.appendChild(chip);
+    });
+    if (mics.length > 0) selectedMicId = mics[0].deviceId;
+  } catch (err) {
+    micDeviceList.innerHTML = '<span style="font-size:0.75rem;color:var(--accent);">Mic access denied</span>';
+  }
+}
+
+async function loadVideoDevices() {
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+    tmp.getTracks().forEach(t => t.stop());
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter(d => d.kind === 'videoinput');
+    videoDeviceList.innerHTML = '';
+    cameras.forEach((cam, i) => {
+      const chip = document.createElement('button');
+      chip.className = 'audio-chip' + (i === 0 ? ' selected' : '');
+      chip.textContent = cam.label || `Camera ${i + 1}`;
+      chip.addEventListener('click', () => {
+        videoDeviceList.querySelectorAll('.audio-chip').forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        selectedVideoId = cam.deviceId;
+      });
+      videoDeviceList.appendChild(chip);
+    });
+    if (cameras.length > 0) {
+      selectedVideoId = cameras[0].deviceId;
+    } else {
+      selectedVideoId = null;
+      videoDeviceList.innerHTML = '<span style="font-size:0.75rem;color:var(--accent);">No camera devices found</span>';
+    }
+  } catch (err) {
+    selectedVideoId = null;
+    videoDeviceList.innerHTML = '<span style="font-size:0.75rem;color:var(--accent);">Camera access denied</span>';
+  }
+}
+
+function updateCaptureModeUI() {
+  const isCameraMode = captureSource === 'camera';
+  videoSources.classList.toggle('visible', isCameraMode);
+  if (isCameraMode) {
+    loadVideoDevices();
+    savedSysAudioPref = wantSysAudio;
+    wantSysAudio = false;
+    sysAudioToggle.classList.remove('on');
+    sysAudioToggle.style.pointerEvents = 'none';
+    sysAudioToggle.style.opacity = '0.5';
+    // Auto-enable mic since camera has no system audio
+    if (!wantMic) {
+      wantMic = true;
+      micToggle.classList.add('on');
+      audioSources.classList.add('visible');
+      loadMicDevices();
+    }
+  } else {
+    wantSysAudio = savedSysAudioPref;
+    sysAudioToggle.classList.toggle('on', wantSysAudio);
+    sysAudioToggle.style.pointerEvents = '';
+    sysAudioToggle.style.opacity = '';
+  }
+}
+
+// --- MIME ---
+function getMimeType() {
+  const format = formatSelect.value;
+  const types = format === 'mp4'
+    ? ['video/mp4;codecs=h264,aac', 'video/mp4;codecs=h264', 'video/mp4', 'video/webm;codecs=h264']
+    : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  return 'video/webm';
+}
+
+// ===== Layer System =====
+
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+function hexToRgb(hex) {
+  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r ? [parseInt(r[1],16), parseInt(r[2],16), parseInt(r[3],16)] : [111,184,255];
+}
+
+function getVideoFrameSize() {
+  return {
+    width:  (compositeCanvas && compositeCanvas.width)  || preview.videoWidth  || 0,
+    height: (compositeCanvas && compositeCanvas.height) || preview.videoHeight || 0
+  };
+}
+
+function mapPreviewClickToFrame(event) {
+  const { width: fw, height: fh } = getVideoFrameSize();
+  if (!fw || !fh) return null;
+  const rect = preview.getBoundingClientRect();
+  const ca = rect.width / rect.height, fa = fw / fh;
+  let rw = rect.width, rh = rect.height, ox = 0, oy = 0;
+  if (ca > fa) { rh = rect.height; rw = rh * fa; ox = (rect.width - rw) / 2; }
+  else          { rw = rect.width;  rh = rw / fa; oy = (rect.height - rh) / 2; }
+  const lx = event.clientX - rect.left - ox;
+  const ly = event.clientY - rect.top  - oy;
+  if (lx < 0 || ly < 0 || lx > rw || ly > rh) return null;
+  return { x: clamp(lx / rw, 0, 1), y: clamp(ly / rh, 0, 1) };
+}
+
+previewContainer.addEventListener('click', event => {
+  if (!displayStream || preview.style.display === 'none') return;
+  const layer = layers.find(l => l.id === activeLayerId);
+  if (!layer) return;
+  const pt = mapPreviewClickToFrame(event);
+  if (!pt) return;
+  layer.x = pt.x;
+  layer.y = pt.y;
+});
+
+// --- Layer rendering ---
+function drawLayers(ctx, fw, fh) {
+  layers.forEach(layer => {
+    if (!layer.visible) return;
+    const margin = Math.max(14, Math.round(fw * 0.01));
+    const cx = layer.x * fw, cy = layer.y * fh;
+    if (layer.type === 'text') drawTextLayer(ctx, layer, cx, cy, fw, fh, margin);
+    else if (layer.type === 'image' && layer.img) drawImageLayer(ctx, layer, cx, cy, fw, fh);
+    else if (layer.type === 'camera' && layer.camVideo && layer.camVideo.readyState >= 2) drawCameraLayer(ctx, layer, cx, cy, fw, fh);
+  });
+}
+
+function drawTextLayer(ctx, layer, cx, cy, fw, fh, margin) {
+  const text = (layer.text || 'TEXT').trim() || 'TEXT';
+  const px = Math.max(10, Math.round(fw * 0.008));
+  const py = Math.max(6, Math.round(fh * 0.008));
+  const fs = Math.round(Math.max(16, fw * 0.018) * layer.size);
+  ctx.font = `700 ${fs}px Rajdhani, sans-serif`;
+  const tw = Math.ceil(ctx.measureText(text).width);
+  const bw = tw + px * 2, bh = fs + py * 2;
+  const x = clamp(Math.round(cx - bw/2), margin, fw - bw - margin);
+  const y = clamp(Math.round(cy - bh/2), margin, fh - bh - margin);
+  const [r,g,b] = hexToRgb(layer.color);
+  ctx.globalAlpha = layer.opacity;
+  ctx.fillStyle = `rgba(${r},${g},${b},0.98)`;
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.fillText(text, x + px, y + bh/2 + 1);
+  ctx.globalAlpha = 1;
+}
+
+function drawImageLayer(ctx, layer, cx, cy, fw, fh) {
+  const nw = layer.img.naturalWidth, nh = layer.img.naturalHeight;
+  const baseW = Math.min(nw, Math.round(fw * 0.25));
+  const iw = Math.round(baseW * layer.size);
+  const ih = Math.round(iw * (nh / nw));
+  const x = clamp(Math.round(cx - iw/2), 0, fw - iw);
+  const y = clamp(Math.round(cy - ih/2), 0, fh - ih);
+  ctx.globalAlpha = layer.opacity;
+  ctx.drawImage(layer.img, x, y, iw, ih);
+  ctx.globalAlpha = 1;
+}
+
+function drawCameraLayer(ctx, layer, cx, cy, fw, fh) {
+  const vid = layer.camVideo;
+  const vw = vid.videoWidth || 640, vh = vid.videoHeight || 360;
+  // Base size: 25% of frame width
+  const baseW = Math.round(fw * 0.25 * layer.size);
+  const baseH = Math.round(baseW * (vh / vw));
+  const x = clamp(Math.round(cx - baseW/2), 0, fw - baseW);
+  const y = clamp(Math.round(cy - baseH/2), 0, fh - baseH);
+  const r = Math.min(baseW, baseH) * 0.12; // corner radius for 'rounded'
+
+  ctx.save();
+  ctx.globalAlpha = layer.opacity;
+
+  // Clip path
+  ctx.beginPath();
+  if (layer.shape === 'circle') {
+    const cr = Math.min(baseW, baseH) / 2;
+    ctx.arc(x + baseW/2, y + baseH/2, cr, 0, Math.PI * 2);
+  } else if (layer.shape === 'rounded') {
+    ctx.roundRect(x, y, baseW, baseH, r);
+  } else {
+    ctx.rect(x, y, baseW, baseH);
+  }
+  ctx.clip();
+
+  // Mirror
+  if (layer.mirror) {
+    ctx.translate(x + baseW/2, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(vid, -baseW/2, y, baseW, baseH);
+  } else {
+    ctx.drawImage(vid, x, y, baseW, baseH);
+  }
+
+  ctx.restore();
+
+  // Border ring
+  ctx.save();
+  ctx.globalAlpha = layer.opacity * 0.85;
+  const [r2,g2,b2] = hexToRgb(layer.color);
+  ctx.strokeStyle = `rgba(${r2},${g2},${b2},0.9)`;
+  ctx.lineWidth = Math.max(2, Math.round(fw * 0.002));
+  ctx.beginPath();
+  if (layer.shape === 'circle') {
+    const cr = Math.min(baseW, baseH) / 2;
+    ctx.arc(x + baseW/2, y + baseH/2, cr, 0, Math.PI * 2);
+  } else if (layer.shape === 'rounded') {
+    ctx.roundRect(x, y, baseW, baseH, r);
+  } else {
+    ctx.rect(x, y, baseW, baseH);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// --- Layer management ---
+async function addLayer(type) {
+  const id = nextLayerId++;
+  const layer = {
+    id, type, visible: true,
+    x: 0.5, y: 0.5,
+    size: 1.0, opacity: 1.0,
+    color: type === 'camera' ? '#4a9eff' : '#6fb8ff',
+    text: 'WATERMARK',
+    img: null, imgDataUrl: null,
+    // camera-specific
+    camStream: null, camVideo: null, camDeviceId: null,
+    shape: 'rounded', mirror: true
+  };
+  layers.push(layer);
+  activeLayerId = id;
+  if (type === 'camera') await startCameraLayer(layer);
+  renderLayersList();
+}
+
+function removeLayer(id) {
+  const layer = layers.find(l => l.id === id);
+  if (layer && layer.camStream) { layer.camStream.getTracks().forEach(t => t.stop()); }
+  layers = layers.filter(l => l.id !== id);
+  if (activeLayerId === id) activeLayerId = layers.length ? layers[layers.length - 1].id : null;
+  renderLayersList();
+}
+
+function renderLayersList() {
+  const el = document.getElementById('layersList');
+  const hint = document.getElementById('layersClickHint');
+  if (!layers.length) {
+    el.innerHTML = '<div class="layers-empty">No layers — click + Add Layer above</div>';
+    hint.style.display = 'none';
+    return;
+  }
+  hint.style.display = '';
+  el.innerHTML = '';
+  [...layers].reverse().forEach(layer => el.appendChild(buildLayerCard(layer)));
+}
+
+function buildLayerCard(layer) {
+  const card = document.createElement('div');
+  card.className = 'layer-card' + (layer.id === activeLayerId ? ' active' : '');
+  card.dataset.id = layer.id;
+
+  // Left: select dot + type badge
+  const dot = document.createElement('button');
+  dot.className = 'layer-dot' + (layer.id === activeLayerId ? ' active' : '');
+  dot.title = 'Select — then click preview to position';
+  dot.addEventListener('click', () => { activeLayerId = layer.id; renderLayersList(); });
+
+  const typeMap = { text: ['TEXT','badge-blue'], image: ['IMG','badge-green'], camera: ['CAM','badge-red'] };
+  const badge = document.createElement('span');
+  badge.className = 'layer-type-badge ' + (typeMap[layer.type]||['?',''])[1];
+  badge.textContent = (typeMap[layer.type]||['?'])[0];
+
+  const left = document.createElement('div');
+  left.className = 'layer-card-left';
+  left.append(dot, badge);
+
+  // Body: controls
+  const body = document.createElement('div');
+  body.className = 'layer-card-body';
+
+  if (layer.type === 'text') {
+    const ti = document.createElement('input');
+    ti.type = 'text'; ti.className = 'layer-text-input';
+    ti.value = layer.text; ti.placeholder = 'Watermark text'; ti.maxLength = 80;
+    ti.addEventListener('input', () => layer.text = ti.value);
+    body.appendChild(ti);
+  }
+
+  if (layer.type === 'image') {
+    const lbl = document.createElement('label');
+    lbl.className = 'layer-img-btn';
+    lbl.innerHTML = layer.img ? '<span style="color:var(--green)">✓ Loaded</span>' : '📂 Upload';
+    const fi = document.createElement('input');
+    fi.type = 'file'; fi.accept = 'image/*'; fi.style.display = 'none';
+    fi.addEventListener('change', () => {
+      const file = fi.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => { layer.img = img; layer.imgDataUrl = e.target.result; renderLayersList(); };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    lbl.appendChild(fi);
+    body.appendChild(lbl);
+  }
+
+  if (layer.type === 'camera') {
+    // Status / device re-pick
+    const statusEl = document.createElement('span');
+    statusEl.style.cssText = 'font-size:0.68rem;color:var(--text-dim);';
+    statusEl.textContent = layer.camStream ? '● Live' : '○ No feed';
+    statusEl.style.color = layer.camStream ? 'var(--green)' : 'var(--accent)';
+
+    const reBtn = document.createElement('button');
+    reBtn.className = 'layer-img-btn';
+    reBtn.textContent = '📷 Pick camera';
+    reBtn.addEventListener('click', async () => {
+      await startCameraLayer(layer);
+      statusEl.textContent = layer.camStream ? '● Live' : '○ Failed';
+      statusEl.style.color = layer.camStream ? 'var(--green)' : 'var(--red)';
+    });
+
+    // Shape selector
+    const shapeGroup = document.createElement('div'); shapeGroup.className = 'layer-field-group';
+    const shapeLabel = document.createElement('span'); shapeLabel.className = 'layer-field-label'; shapeLabel.textContent = 'Shape';
+    const shapeSelect = document.createElement('select');
+    shapeSelect.style.cssText = 'font-family:var(--mono);font-size:0.7rem;background:#000;color:var(--accent-bright);border:1px solid var(--border-bright);border-radius:3px;padding:3px 6px;outline:none;cursor:pointer;';
+    [['rect','Rect'],['rounded','Rounded'],['circle','Circle']].forEach(([v,l]) => {
+      const o = document.createElement('option'); o.value = v; o.textContent = l;
+      if (layer.shape === v) o.selected = true;
+      shapeSelect.appendChild(o);
+    });
+    shapeSelect.addEventListener('change', () => layer.shape = shapeSelect.value);
+    shapeGroup.append(shapeLabel, shapeSelect);
+
+    // Mirror toggle
+    const mirrorGroup = document.createElement('div'); mirrorGroup.className = 'layer-field-group';
+    const mirrorLabel = document.createElement('span'); mirrorLabel.className = 'layer-field-label'; mirrorLabel.textContent = 'Mirror';
+    const mirrorBtn = document.createElement('div');
+    mirrorBtn.className = 'toggle' + (layer.mirror ? ' on' : '');
+    mirrorBtn.addEventListener('click', () => { layer.mirror = !layer.mirror; mirrorBtn.classList.toggle('on', layer.mirror); });
+    mirrorGroup.append(mirrorLabel, mirrorBtn);
+
+    body.append(statusEl, reBtn, shapeGroup, mirrorGroup);
+  }
+
+  if (layer.type !== 'image') {
+    const cg = document.createElement('div'); cg.className = 'layer-field-group';
+    const cl = document.createElement('span'); cl.className = 'layer-field-label'; cl.textContent = 'Color';
+    const cp = document.createElement('input'); cp.type = 'color'; cp.className = 'layer-color-pick'; cp.value = layer.color;
+    cp.addEventListener('input', () => layer.color = cp.value);
+    cg.append(cl, cp); body.appendChild(cg);
+  }
+
+  const sg = document.createElement('div'); sg.className = 'layer-field-group';
+  const sl = document.createElement('span'); sl.className = 'layer-field-label'; sl.textContent = 'Size';
+  const ss = document.createElement('input'); ss.type = 'range'; ss.min = '0.3'; ss.max = '4'; ss.step = '0.1';
+  ss.value = String(layer.size); ss.className = 'layer-size-slider';
+  const sv = document.createElement('span'); sv.className = 'layer-size-val'; sv.textContent = layer.size.toFixed(1) + '×';
+  ss.addEventListener('input', () => { layer.size = parseFloat(ss.value); sv.textContent = layer.size.toFixed(1) + '×'; });
+  sg.append(sl, ss, sv); body.appendChild(sg);
+
+  const og = document.createElement('div'); og.className = 'layer-field-group';
+  const ol = document.createElement('span'); ol.className = 'layer-field-label'; ol.textContent = 'Opacity';
+  const os = document.createElement('input'); os.type = 'range'; os.min = '0.05'; os.max = '1'; os.step = '0.05';
+  os.value = String(layer.opacity); os.className = 'layer-opacity-slider';
+  const ov = document.createElement('span'); ov.className = 'layer-size-val'; ov.textContent = Math.round(layer.opacity*100) + '%';
+  os.addEventListener('input', () => { layer.opacity = parseFloat(os.value); ov.textContent = Math.round(layer.opacity*100) + '%'; });
+  og.append(ol, os, ov); body.appendChild(og);
+
+  // Actions
+  const actions = document.createElement('div'); actions.className = 'layer-card-actions';
+
+  const vb = document.createElement('button');
+  vb.className = 'layer-btn' + (layer.visible ? '' : ' vis-off');
+  vb.title = layer.visible ? 'Hide' : 'Show'; vb.textContent = layer.visible ? '👁' : '🙈';
+  vb.addEventListener('click', () => { layer.visible = !layer.visible; renderLayersList(); });
+
+  const db = document.createElement('button');
+  db.className = 'layer-btn del-btn'; db.title = 'Remove layer'; db.textContent = '✕';
+  db.addEventListener('click', () => removeLayer(layer.id));
+
+  actions.append(vb, db);
+  card.append(left, body, actions);
+  return card;
+}
+
+// --- Camera layer helpers ---
+async function startCameraLayer(layer) {
+  // Stop any existing stream
+  if (layer.camStream) { layer.camStream.getTracks().forEach(t => t.stop()); layer.camStream = null; }
+  try {
+    const constraints = { video: layer.camDeviceId
+      ? { deviceId: { exact: layer.camDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      : { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false };
+    layer.camStream = await navigator.mediaDevices.getUserMedia(constraints);
+    // Populate deviceId from whichever was actually chosen
+    const vt = layer.camStream.getVideoTracks()[0];
+    if (vt) layer.camDeviceId = vt.getSettings().deviceId;
+    if (!layer.camVideo) {
+      layer.camVideo = document.createElement('video');
+      layer.camVideo.autoplay = true;
+      layer.camVideo.muted = true;
+      layer.camVideo.playsInline = true;
+    }
+    layer.camVideo.srcObject = layer.camStream;
+    await layer.camVideo.play();
+  } catch (e) {
+    console.warn('Camera layer failed:', e);
+    layer.camStream = null;
+  }
+}
+
+function stopBurnInPipeline() {
+  if (compositeRaf) {
+    cancelAnimationFrame(compositeRaf);
+    compositeRaf = null;
+  }
+  if (compositeSourceVideo) {
+    compositeSourceVideo.pause();
+    compositeSourceVideo.srcObject = null;
+    compositeSourceVideo = null;
+  }
+  if (compositeStream) {
+    compositeStream.getTracks().forEach(track => track.stop());
+    compositeStream = null;
+  }
+  compositeCanvas = null;
+  compositeCtx = null;
+}
+
+async function createBurnInStream(baseStream) {
+  stopBurnInPipeline();
+
+  const baseVideoTrack = baseStream.getVideoTracks()[0];
+  if (!baseVideoTrack) return baseStream;
+
+  const settings = baseVideoTrack.getSettings();
+  const frameW = settings.width || 1920;
+  const frameH = settings.height || 1080;
+  const frameRate = settings.frameRate || 30;
+
+  compositeCanvas = document.createElement('canvas');
+  compositeCanvas.width = frameW;
+  compositeCanvas.height = frameH;
+  compositeCtx = compositeCanvas.getContext('2d');
+
+  compositeSourceVideo = document.createElement('video');
+  compositeSourceVideo.autoplay = true;
+  compositeSourceVideo.muted = true;
+  compositeSourceVideo.playsInline = true;
+  compositeSourceVideo.srcObject = new MediaStream([baseVideoTrack]);
+  await compositeSourceVideo.play();
+
+  const outVideoStream = compositeCanvas.captureStream(frameRate);
+  compositeStream = new MediaStream([
+    outVideoStream.getVideoTracks()[0],
+    ...baseStream.getAudioTracks()
+  ]);
+
+  const drawFrame = () => {
+    if (!compositeCtx || !compositeCanvas || !compositeSourceVideo) return;
+    compositeCtx.clearRect(0, 0, compositeCanvas.width, compositeCanvas.height);
+    compositeCtx.drawImage(compositeSourceVideo, 0, 0, compositeCanvas.width, compositeCanvas.height);
+
+    if (layers.some(l => l.visible)) drawLayers(compositeCtx, compositeCanvas.width, compositeCanvas.height);
+
+    compositeRaf = requestAnimationFrame(drawFrame);
+  };
+
+  drawFrame();
+  return compositeStream;
+}
+
+// --- Audio mixing ---
+async function buildCombinedStream(dStream) {
+  const videoTracks = dStream.getVideoTracks();
+  const displayAudioTracks = dStream.getAudioTracks();
+  const hasDisplayAudio = displayAudioTracks.length > 0;
+  const audioTracksToMix = [];
+
+  if (wantSysAudio && hasDisplayAudio) {
+    audioTracksToMix.push(...displayAudioTracks);
+  }
+
+  let hasMicAudio = false;
+  if (wantMic) {
+    try {
+      const constraints = selectedMicId
+        ? { audio: { deviceId: { exact: selectedMicId }, echoCancellation: true, noiseSuppression: true } }
+        : { audio: { echoCancellation: true, noiseSuppression: true } };
+      micStream = await navigator.mediaDevices.getUserMedia(constraints);
+      audioTracksToMix.push(...micStream.getAudioTracks());
+      hasMicAudio = true;
+    } catch (err) { console.warn('Mic denied:', err); }
+  }
+
+  if (audioTracksToMix.length > 0) {
+    audioContext = new AudioContext();
+    const dest = audioContext.createMediaStreamDestination();
+
+    // Per-channel analysers
+    meterAnalyserSys = audioContext.createAnalyser();
+    meterAnalyserSys.fftSize = 2048; meterAnalyserSys.smoothingTimeConstant = 0.85;
+    meterAnalyserMic = audioContext.createAnalyser();
+    meterAnalyserMic.fftSize = 2048; meterAnalyserMic.smoothingTimeConstant = 0.85;
+    const sysTracks = wantSysAudio && hasDisplayAudio ? displayAudioTracks : [];
+    const micTracks = micStream ? micStream.getAudioTracks() : [];
+
+    for (const track of sysTracks) {
+      try {
+        const src = audioContext.createMediaStreamSource(new MediaStream([track]));
+        src.connect(dest);
+        src.connect(meterAnalyserSys);
+      } catch (e) { console.warn('Track connect failed:', e); }
+    }
+    for (const track of micTracks) {
+      try {
+        const src = audioContext.createMediaStreamSource(new MediaStream([track]));
+        src.connect(dest);
+        src.connect(meterAnalyserMic);
+      } catch (e) { console.warn('Track connect failed:', e); }
+    }
+    return {
+      stream: new MediaStream([...videoTracks, ...dest.stream.getAudioTracks()]),
+      hasSystemAudio: wantSysAudio && hasDisplayAudio,
+      hasMicAudio
+    };
+  }
+
+  return { stream: new MediaStream(videoTracks), hasSystemAudio: false, hasMicAudio: false };
+}
+
+// --- Audio Meter ---
+function readLevel(analyser, buf) {
+  if (!analyser) return -Infinity;
+  analyser.getFloatTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  const rms = Math.sqrt(sum / buf.length);
+  return rms > 0.00001 ? 20 * Math.log10(rms) : -Infinity;
+}
+
+function updateChannel(db, overlayId, peakElId, dbElId, peakRef, peakTimerRef, setters) {
+  const level = Math.max(0, Math.min(1, (db + 60) / 60));
+  if (level > peakRef.val) {
+    peakRef.val = level;
+    clearTimeout(peakTimerRef.id);
+    peakTimerRef.id = setTimeout(() => { peakRef.val = 0; }, 1800);
+  }
+  const overlay = $(overlayId), peakEl = $(peakElId), dbEl = $(dbElId);
+  if (overlay) overlay.style.height = (1 - level) * 100 + '%';
+  if (peakEl) peakEl.style.bottom = Math.max(0, peakRef.val * 100 - 0.1) + '%';
+  if (dbEl) {
+    if (!isFinite(db) || db < -60) {
+      dbEl.textContent = '-\u221E'; dbEl.style.color = 'var(--text-dim)';
+    } else {
+      dbEl.textContent = Math.round(db) + 'dB';
+      dbEl.style.color = db > -6 ? 'var(--red)' : db > -18 ? 'var(--yellow)' : 'var(--green)';
+    }
+  }
+}
+
+function startAudioMeter() {
+  const bufSize = 2048;
+  const bufSys = new Float32Array(bufSize);
+  const bufMic = new Float32Array(bufSize);
+  const peakSysRef = { val: 0 }, peakMicRef = { val: 0 };
+  const timerSysRef = { id: null }, timerMicRef = { id: null };
+
+  // Label coloring
+  const lSys = $('meterLabelSys'), lMic = $('meterLabelMic');
+  if (lSys) lSys.className = 'meter-ch-label' + (meterAnalyserSys ? ' active-sys' : '');
+  if (lMic) lMic.className = 'meter-ch-label' + (meterAnalyserMic ? ' active-mic' : '');
+
+  function tick() {
+    updateChannel(
+      readLevel(meterAnalyserSys, bufSys),
+      'meterOverlaySys', 'meterPeakSys', 'meterDbSys', peakSysRef, timerSysRef
+    );
+    updateChannel(
+      readLevel(meterAnalyserMic, bufMic),
+      'meterOverlayMic', 'meterPeakMic', 'meterDbMic', peakMicRef, timerMicRef
+    );
+    meterAnimFrame = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function stopAudioMeter() {
+  if (meterAnimFrame) { cancelAnimationFrame(meterAnimFrame); meterAnimFrame = null; }
+  // Reset both channels
+  ['meterOverlaySys','meterOverlayMic'].forEach(id => { const el = $(id); if (el) el.style.height = '100%'; });
+  ['meterPeakSys','meterPeakMic'].forEach(id => { const el = $(id); if (el) el.style.bottom = '0%'; });
+  ['meterDbSys','meterDbMic'].forEach(id => { const el = $(id); if (el) { el.textContent = '-\u221E'; el.style.color = 'var(--text-dim)'; } });
+  ['meterLabelSys','meterLabelMic'].forEach(id => { const el = $(id); if (el) el.className = 'meter-ch-label'; });
+  meterAnalyserSys = null; meterAnalyserMic = null;
+}
+
+// --- Audio UI ---
+function updateAudioUI(hasSys, hasMic) {
+  const parts = [];
+  if (hasSys) parts.push('System ✓');
+  if (hasMic) parts.push('Mic ✓');
+
+  if (parts.length > 0) {
+    audioStatus.style.display = 'flex';
+    audioDot.className = 'audio-dot has-audio';
+    audioStatusText.textContent = parts.join(' + ');
+    infoBanner.style.display = 'none';
+  } else if (wantSysAudio || wantMic) {
+    audioStatus.style.display = 'flex';
+    audioDot.className = 'audio-dot no-audio';
+    audioStatusText.textContent = 'No audio';
+
+    const tips = [];
+    if (wantSysAudio && !hasSys && captureSource === 'screen') {
+      tips.push(`<strong>System audio not captured.</strong> Make sure you ticked the audio checkbox in Chrome's share dialog: <strong>"Also share tab audio"</strong> (for tabs) or <strong>"Also share system audio"</strong> (for entire screen on Windows/ChromeOS). Window sharing does not support audio. Try re-capturing and look for the checkbox at the bottom of the picker.`);
+    }
+    if (wantSysAudio && !hasSys && captureSource === 'camera') {
+      tips.push(`<strong>System audio is unavailable in Camera mode.</strong> Switch Source to <strong>Screen</strong> to capture system/tab audio.`);
+    }
+    if (wantMic && !hasMic) {
+      tips.push(`<strong>Microphone not available.</strong> Check browser permissions.`);
+    }
+    infoBanner.innerHTML = tips.join('<br><br>');
+    infoBanner.style.display = 'block';
+  } else {
+    audioStatus.style.display = 'none';
+    infoBanner.style.display = 'none';
+  }
+}
+
+// --- Start Capture ---
+async function startCapture(withAudio) {
+  if (captureSource === 'camera') {
+    return navigator.mediaDevices.getUserMedia({
+      video: selectedVideoId ? { deviceId: { exact: selectedVideoId }, frameRate: { ideal: 30 } } : { frameRate: { ideal: 30 } },
+      audio: false
+    });
+  }
+
+  const opts = {
+    video: { cursor: 'always', frameRate: { ideal: 30 } },
+    preferCurrentTab: false,
+    selfBrowserSurface: 'include',
+  };
+
+  if (withAudio) {
+    opts.audio = true;
+    opts.systemAudio = 'include';
+  } else {
+    opts.audio = false;
+  }
+
+  return navigator.mediaDevices.getDisplayMedia(opts);
+}
+
+btnCapture.addEventListener('click', async () => {
+  let audioFailed = false;
+
+  try {
+    if (captureSource === 'screen') {
+      // First attempt: with audio
+      try {
+        displayStream = await startCapture(true);
+      } catch (err) {
+        // "Could not start audio source" is a known Chrome bug with
+        // entire-screen + system audio. Retry without audio.
+        if (err.name === 'NotReadableError' || err.message.includes('Could not start audio source')) {
+          console.warn('Audio source failed, retrying without system audio...');
+          audioFailed = true;
+          displayStream = await startCapture(false);
+        } else {
+          throw err; // re-throw if it's a different error
+        }
+      }
+    } else {
+      displayStream = await startCapture(false);
+    }
+
+    const result = await buildCombinedStream(displayStream);
+    combinedStream = await createBurnInStream(result.stream);
+
+    console.log(`Combined: ${combinedStream.getVideoTracks().length}V ${combinedStream.getAudioTracks().length}A`);
+
+    preview.srcObject = combinedStream;
+    preview.style.display = 'block';
+    placeholder.style.display = 'none';
+    previewContainer.classList.add('active');
+    previewContainer.classList.add('positioning');
+
+    updateAudioUI(result.hasSystemAudio, result.hasMicAudio);
+    startAudioMeter(); // always start — shows idle state even with no audio
+
+    // Show specific warning if audio failed
+    if (audioFailed) {
+      infoBanner.style.display = 'block';
+      infoBanner.innerHTML = `<strong>System audio failed</strong> — this is a known Chrome bug when sharing an entire screen with audio. The capture has started <strong>without system audio</strong>. Workarounds:<br><br>
+        • <strong>Share a browser tab instead</strong> — tab audio capture works reliably<br>
+        • <strong>Enable the Microphone toggle</strong> and re-capture — mic audio always works<br>
+        • Try the <strong>Xbox Game Bar</strong> (Win+G) if you need full desktop audio`;
+      audioStatus.style.display = 'flex';
+      audioDot.className = 'audio-dot no-audio';
+      audioStatusText.textContent = audioFailed && wantMic && result.hasMicAudio ? 'Mic only' : 'No audio (fallback)';
+    }
+
+    // Collapse the guide after successful capture
+    guideBody.classList.remove('open');
+    guideChevron.classList.remove('open');
+
+    btnCapture.disabled = true;
+    btnCapture.textContent = 'Capturing…';
+    btnRecord.disabled = false;
+
+    displayStream.getVideoTracks()[0].addEventListener('ended', stopCapture);
+
+  } catch (err) {
+    if (err.name !== 'NotAllowedError') {
+      console.error('Capture error:', err);
+      alert('Screen capture failed: ' + err.message);
+    }
+  }
+});
+
+// --- Record ---
+btnRecord.addEventListener('click', () => {
+  if (!combinedStream) return;
+  chunks = [];
+
+  const mimeType = getMimeType();
+  const bitrate = parseInt(qualitySelect.value);
+
+  try {
+    recorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: bitrate, audioBitsPerSecond: 128000 });
+  } catch (e) {
+    try { recorder = new MediaRecorder(combinedStream, { mimeType }); }
+    catch (e2) { recorder = new MediaRecorder(combinedStream); }
+  }
+
+  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+  recorder.onstop = () => {
+    const usedMime = recorder.mimeType || 'video/webm';
+    const blob = new Blob(chunks, { type: usedMime });
+    const ext = usedMime.includes('mp4') ? 'mp4' : 'webm';
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+
+    recordings.unshift({
+      id: Date.now(),
+      name: `recording-${ts}.${ext}`,
+      blob,
+      url: URL.createObjectURL(blob),
+      size: blob.size,
+      duration: timerBadge.textContent,
+      date: new Date()
+    });
+
+    renderRecordings();
+    resetRecordingUI();
+  };
+
+  recorder.start(500);
+  isPaused = false;
+  pauseOffset = 0;
+  recordStartTime = Date.now();
+  startTimer();
+
+  previewContainer.classList.remove('active');
+  previewContainer.classList.add('rec');
+  headerDot.classList.add('recording');
+  recBadge.style.display = 'flex';
+  timerBadge.style.display = 'block';
+
+  btnRecord.disabled = true;
+  btnStop.disabled = false;
+  btnPause.disabled = false;
+  btnPause.textContent = 'Pause';
+  formatSelect.disabled = true;
+  qualitySelect.disabled = true;
+});
+
+// --- Stop ---
+btnStop.addEventListener('click', () => {
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  stopTimer();
+});
+
+// --- Pause ---
+btnPause.addEventListener('click', () => {
+  if (!recorder) return;
+  if (isPaused) {
+    recorder.resume();
+    isPaused = false;
+    recordStartTime = Date.now();
+    startTimer();
+    btnPause.textContent = 'Pause';
+    recBadge.style.display = 'flex';
+  } else {
+    recorder.pause();
+    isPaused = true;
+    pauseOffset += Date.now() - recordStartTime;
+    stopTimer();
+    btnPause.textContent = 'Resume';
+    recBadge.style.display = 'none';
+  }
+});
+
+function resetRecordingUI() {
+  previewContainer.classList.remove('rec');
+  if (displayStream) previewContainer.classList.add('active');
+  headerDot.classList.remove('recording');
+  recBadge.style.display = 'none';
+  timerBadge.style.display = 'none';
+  timerBadge.textContent = '00:00';
+  btnRecord.disabled = !displayStream;
+  btnStop.disabled = true;
+  btnPause.disabled = true;
+  formatSelect.disabled = false;
+  qualitySelect.disabled = false;
+}
+
+function stopCapture() {
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  stopTimer();
+  stopAudioMeter();
+  stopBurnInPipeline();
+  // Stop any camera overlay streams
+  layers.forEach(l => { if (l.camStream) { l.camStream.getTracks().forEach(t => t.stop()); l.camStream = null; } });
+  [displayStream, micStream, combinedStream].forEach(s => { if (s) s.getTracks().forEach(t => t.stop()); });
+  displayStream = micStream = combinedStream = null;
+  if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
+  preview.srcObject = null;
+  preview.style.display = 'none';
+  placeholder.style.display = '';
+  previewContainer.classList.remove('active', 'rec');
+  previewContainer.classList.remove('positioning');
+  headerDot.classList.remove('recording');
+  recBadge.style.display = 'none';
+  timerBadge.style.display = 'none';
+  audioStatus.style.display = 'none';
+  infoBanner.style.display = 'none';
+  btnCapture.disabled = false;
+  btnCapture.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 16 21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Start Capture`;
+  btnRecord.disabled = true;
+  btnStop.disabled = true;
+  btnPause.disabled = true;
+}
+
+// --- Timer ---
+function startTimer() { timerInterval = setInterval(updateTimer, 500); }
+function stopTimer() { clearInterval(timerInterval); }
+function updateTimer() {
+  const elapsed = pauseOffset + (Date.now() - recordStartTime);
+  const s = Math.floor(elapsed / 1000);
+  timerBadge.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+// --- Recordings ---
+function formatSize(b) { return b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB'; }
+
+function renderRecordings() {
+  if (!recordings.length) { recordingsSection.style.display = 'none'; return; }
+  recordingsSection.style.display = '';
+  recordingsList.innerHTML = recordings.map((r, i) => `
+    <div class="recording-item">
+      <div class="info">
+        <div class="name">${r.name}</div>
+        <div class="meta">${formatSize(r.size)} · ${r.duration}</div>
+      </div>
+      <div class="actions">
+        <button class="btn-sm" onclick="playRec(${i})">Play</button>
+        <button class="btn-sm" onclick="dlRec(${i})">Download</button>
+        <button class="btn-sm danger" onclick="delRec(${i})">Delete</button>
+      </div>
+    </div>`).join('');
+}
+
+function playRec(i) {
+  const r = recordings[i];
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>${r.name}</title>
+  <style>body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;}
+  video{max-width:100%;max-height:100vh;}</style></head>
+  <body><video src="${r.url}" controls autoplay></video></body></html>`);
+}
+
+function dlRec(i) { const a = document.createElement('a'); a.href = recordings[i].url; a.download = recordings[i].name; a.click(); }
+
+function delRec(i) { URL.revokeObjectURL(recordings[i].url); recordings.splice(i, 1); renderRecordings(); }
+</script>
+</body>
+</html>
