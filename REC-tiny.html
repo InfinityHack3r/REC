@@ -1,0 +1,89 @@
+<!DOCTYPE html><html><head><meta charset=UTF-8><title>REC</title>
+<style>*{box-sizing:border-box}body{font:13px monospace;background:#111;color:#ddd;display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px}video,canvas{max-width:840px;width:100%;background:#000;display:none}button{padding:6px 14px;background:#1a1a2e;color:#ddd;border:1px solid #333;cursor:pointer;border-radius:3px}button:disabled{opacity:.3}select{color:#ddd;background:#1a1a2e;border:1px solid #333;padding:4px 8px;border-radius:3px}#t{color:#f44}label{cursor:pointer}.dim{opacity:.4;pointer-events:none}</style>
+</head><body>
+<h2>&#9679; REC</h2>
+<video id=v autoplay muted playsinline></video><canvas id=cv></canvas>
+<div id=cfg>Source: <select id=src><option>Screen</option><option>Camera</option><option>Both</option></select>
+ Q: <select id=q><option value=1e6>1M</option><option value=2.5e6 selected>2.5M</option><option value=5e6>5M</option></select>
+ Res: <select id=res></select>
+ <label><input type=checkbox id=sys checked> Sys</label>
+ <label><input type=checkbox id=mic checked> Mic</label></div>
+<div id=est style="font-size:11px;color:#666"></div>
+<div id=msg style="font-size:12px;color:#888;min-height:1.4em"></div>
+<div><button id=bc>Capture</button> <button id=br disabled>Record</button> <button id=bp disabled>Pause</button> <button id=bs disabled>Stop</button> <span id=t></span></div>
+<script>
+let str,rec,cks=[],iv,t0=0,off=0,paused=0,writable=null,fname,raf,streams=[],killed=0,ax=null;
+const log=s=>msg.innerHTML=s,D=navigator.mediaDevices;
+function proj(){
+  const [rw,rh]=(res.value||'1920x1080').split('x').map(Number);
+  const pxRatio=(rw*rh)/(1920*1080);
+  const b=(+q.value*pxRatio+128e3)/8,s=v=>v<1024?v+'MB':(v/1024).toFixed(1)+'GB';
+  est.textContent='Est: '+[60,600,3600,7200].map((d,i)=>s(b*d/1e6|0)+'/'+['1m','10m','1h','2h'][i]).join(' \xb7 ')}
+const rOpts={single:['1280x720','1920x1080','2560x1440','3840x2160'],both:['1280x360','1920x540','2560x720','3840x1080']},rDef={single:'1920x1080',both:'3840x1080'};
+function setRes(){const m=src.value==='Both'?'both':'single',o=rOpts[m];res.innerHTML=o.map(v=>'<option'+(v===rDef[m]?' selected':'')+'>'+v+'</option>').join('');proj()}
+src.onchange=setRes;setRes();q.onchange=res.onchange=proj;
+function tick(){const n=(off+Date.now()-t0)/1e3|0;t.textContent=(''+( n/60|0)).padStart(2,'0')+':'+(''+( n%60)).padStart(2,'0')}
+
+function kill(){
+  killed=1;if(raf){cancelAnimationFrame(raf);raf=null}
+  if(rec&&rec.state!=='inactive')rec.stop();
+  if(writable){writable.close().catch(()=>{});writable=null}
+  if(ax){ax.close();ax=null}
+  clearInterval(iv);streams.forEach(s=>s.getTracks().forEach(t=>t.stop()));streams=[];
+  str=rec=null;v.srcObject=null;v.style.display=cv.style.display='none';
+  bc.disabled=0;br.disabled=bs.disabled=bp.disabled=1;bp.textContent='Pause';t.textContent='';cfg.classList.remove('dim');
+}
+
+bc.onclick=async()=>{
+  bc.disabled=1;killed=0;let scrS,camS,mode=src.value,at=[];
+  try{
+    if(mode!=='Camera'){
+      log('1: Pick screen\u2026');
+      try{scrS=await D.getDisplayMedia({video:{frameRate:{ideal:30}},audio:sys.checked})}
+      catch(e){if(e.name==='NotReadableError'){log('1: Retrying without sys audio\u2026');scrS=await D.getDisplayMedia({video:{frameRate:{ideal:30}},audio:0})}else throw e}
+      streams.push(scrS);if(sys.checked)at.push(...scrS.getAudioTracks());
+    }
+    if(mode!=='Screen'){
+      const [cw,ch]=res.value.split('x').map(Number);
+      log('2: Camera\u2026');camS=await D.getUserMedia({video:{width:{ideal:mode==='Both'?cw/2:cw},height:{ideal:ch},frameRate:{ideal:30}},audio:0});streams.push(camS);
+    }
+    if(mic.checked){log('3: Mic\u2026');const m=await D.getUserMedia({audio:{echoCancellation:0,noiseSuppression:0}});streams.push(m);at.push(...m.getAudioTracks())}
+    let ma=at;
+    if(at[1]){ax=new AudioContext;const d=ax.createMediaStreamDestination();at.forEach(t=>ax.createMediaStreamSource(new MediaStream([t])).connect(d));ma=d.stream.getAudioTracks()}
+    if(mode==='Both'){
+      const [W,H]=res.value.split('x').map(Number),hw=W/2;cv.width=W;cv.height=H;cv.style.display='block';
+      const cx=cv.getContext('2d'),sv=document.createElement('video'),cm=document.createElement('video');
+      sv.autoplay=sv.muted=sv.playsInline=cm.autoplay=cm.muted=cm.playsInline=1;
+      sv.srcObject=scrS;cm.srcObject=camS;await sv.play();await cm.play();
+      (function draw(){cx.drawImage(sv,0,0,hw,H);cx.drawImage(cm,hw,0,hw,H);raf=requestAnimationFrame(draw)})();
+      str=new MediaStream([...cv.captureStream(30).getVideoTracks(),...ma]);scrS.getVideoTracks()[0].onended=kill;
+    }else{const b=scrS||camS;v.srcObject=b;v.style.display='block';str=new MediaStream([...b.getVideoTracks(),...ma]);b.getVideoTracks()[0].onended=kill}
+    log('Ready');br.disabled=0;cfg.classList.add('dim');
+  }catch(e){log(e.name==='NotAllowedError'?'Cancelled':e.message);kill()}
+};
+
+br.onclick=async()=>{
+  cks=[];writable=null;killed=0;
+  const m=['video/mp4;codecs=avc1','video/webm;codecs=vp9,opus','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'';
+  const ext=m.includes('mp4')?'mp4':'webm';
+  fname='rec-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.'+ext;
+  if(typeof showSaveFilePicker==='function'){
+    try{const fh=await showSaveFilePicker({suggestedName:fname,types:[{accept:{['video/'+ext]:['.'+ext]}}]});writable=await fh.createWritable();fname=fh.name;log('Disk: '+fname)}
+    catch(e){if(e.name==='AbortError')return;log('Disk failed, download fallback')}
+  }else log('No disk API, download on stop');
+  try{rec=new MediaRecorder(str,{mimeType:m,videoBitsPerSecond:+q.value,audioBitsPerSecond:128e3})}catch(e){rec=new MediaRecorder(str)}
+  rec.ondataavailable=async e=>{if(e.data.size)try{writable?await writable.write(e.data):cks.push(e.data)}catch(er){log('Write err: '+er.message)}};
+  rec.onstop=async()=>{
+    if(killed)return;
+    try{if(writable){await writable.close();writable=null;log('Saved: '+fname)}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(cks));a.download=fname;a.click();log('Downloaded: '+fname)}}catch(e){}
+    clearInterval(iv);br.disabled=0;bs.disabled=bp.disabled=1;bp.textContent='Pause';t.textContent='';
+  };
+  rec.start(500);paused=0;off=0;t0=Date.now();iv=setInterval(tick,500);br.disabled=1;bs.disabled=bp.disabled=0;
+};
+bp.onclick=()=>{if(!rec||rec.state==='inactive')return;
+  if(paused){rec.resume();paused=0;t0=Date.now();iv=setInterval(tick,500);bp.textContent='Pause'}
+  else{rec.pause();paused=1;off+=Date.now()-t0;clearInterval(iv);bp.textContent='Resume'}};
+bs.onclick=()=>{if(rec&&rec.state!=='inactive')rec.stop()};
+window.onbeforeunload=e=>{if(rec&&rec.state!=='inactive'){rec.stop();e.preventDefault();e.returnValue=''}};
+</script></body></html>
