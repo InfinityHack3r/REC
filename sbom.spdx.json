@@ -1,0 +1,85 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "REC",
+  "documentNamespace": "https://github.com/InfinityHack3r/REC/sbom.spdx.json",
+  "creationInfo": {
+    "created": "2026-03-03T00:00:00Z",
+    "creators": [
+      "Tool: manual"
+    ]
+  },
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-REC",
+      "name": "REC",
+      "versionInfo": "main",
+      "downloadLocation": "https://github.com/InfinityHack3r/REC",
+      "filesAnalyzed": false,
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "copyrightText": "Copyright (c) 2026 InfinityHack3r",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/InfinityHack3r/REC@main"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-ShareTechMono",
+      "name": "Share Tech Mono",
+      "versionInfo": "latest",
+      "downloadLocation": "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap",
+      "filesAnalyzed": false,
+      "licenseConcluded": "OFL-1.1",
+      "licenseDeclared": "OFL-1.1",
+      "copyrightText": "NOASSERTION",
+      "supplier": "Organization: Google Fonts",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/google-fonts/share-tech-mono@latest"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-Rajdhani",
+      "name": "Rajdhani",
+      "versionInfo": "latest",
+      "downloadLocation": "https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap",
+      "filesAnalyzed": false,
+      "licenseConcluded": "OFL-1.1",
+      "licenseDeclared": "OFL-1.1",
+      "copyrightText": "NOASSERTION",
+      "supplier": "Organization: Google Fonts",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/google-fonts/rajdhani@latest"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-REC"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-REC",
+      "relationshipType": "DYNAMIC_LINK",
+      "relatedSpdxElement": "SPDXRef-Package-ShareTechMono"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-REC",
+      "relationshipType": "DYNAMIC_LINK",
+      "relatedSpdxElement": "SPDXRef-Package-Rajdhani"
+    }
+  ]
+}
