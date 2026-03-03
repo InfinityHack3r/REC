@@ -1,0 +1,143 @@
+name: Test & Package
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. Sanity tests ────────────────────────────────────────────────────────
+  test:
+    name: Sanity tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Files exist
+        run: |
+          for f in REC.html REC-tiny.html README.md; do
+            [ -f "$f" ] && echo "✓ $f" || { echo "✗ missing: $f"; exit 1; }
+          done
+
+      - name: REC-tiny.html size < 20 KB
+        run: |
+          SIZE=$(wc -c < REC-tiny.html)
+          echo "REC-tiny.html: ${SIZE} bytes"
+          [ "$SIZE" -lt 20480 ] || { echo "✗ tiny is too large (${SIZE} bytes, limit 20480)"; exit 1; }
+          echo "✓ size OK"
+
+      - name: REC-tiny required element IDs
+        run: |
+          REQUIRED="id=bc id=br id=bp id=bs id=src id=q id=res id=sys id=mic id=msg id=est id=t id=v id=cv id=cfg"
+          FAIL=0
+          for id in $REQUIRED; do
+            grep -q "$id" REC-tiny.html && echo "✓ $id" || { echo "✗ missing $id in REC-tiny.html"; FAIL=1; }
+          done
+          exit $FAIL
+
+      - name: REC-tiny MIME priority order (mp4 before webm)
+        run: |
+          # avc1 must appear at a lower character offset than vp9 across the whole file
+          python3 -c "
+          c=open('REC-tiny.html').read()
+          a,v=c.find('avc1'),c.find('vp9')
+          ok=0<a<v
+          print('✓ MIME order correct (avc1 @%d, vp9 @%d)'%(a,v) if ok else '✗ MIME order wrong (avc1 @%d, vp9 @%d)'%(a,v))
+          exit(0 if ok else 1)
+          "
+
+      - name: REC.html required element IDs
+        run: |
+          REQUIRED="btnCapture btnRecord btnStop btnPause sourceSelect formatSelect qualitySelect sysAudioToggle micToggle diskSaveToggle preview layersPanel recordingsList audioMeterPanel"
+          FAIL=0
+          for id in $REQUIRED; do
+            grep -q "id=\"$id\"" REC.html && echo "✓ $id" || { echo "✗ missing id=\"$id\" in REC.html"; FAIL=1; }
+          done
+          exit $FAIL
+
+      - name: REC.html no external script dependencies
+        run: |
+          # Only Google Fonts (stylesheet) is allowed - no external JS
+          SCRIPTS=$(grep -oP '<script[^>]+src="https?://[^"]+"' REC.html || true)
+          if [ -n "$SCRIPTS" ]; then
+            echo "✗ External scripts found:"; echo "$SCRIPTS"; exit 1
+          fi
+          echo "✓ No external JS dependencies"
+
+      - name: README mentions both files
+        run: |
+          grep -q "REC-tiny.html" README.md && echo "✓ README mentions REC-tiny.html" || { echo "✗ README missing REC-tiny.html"; exit 1; }
+          grep -q "REC.html"      README.md && echo "✓ README mentions REC.html"      || { echo "✗ README missing REC.html"; exit 1; }
+
+  # ── 2. Package ─────────────────────────────────────────────────────────────
+  package:
+    name: Build zip
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      zip_name: ${{ steps.name.outputs.zip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine zip name
+        id: name
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "zip=REC-${TAG}.zip" >> "$GITHUB_OUTPUT"
+          else
+            SHA="${GITHUB_SHA::7}"
+            echo "zip=REC-${GITHUB_REF_NAME//\//-}-${SHA}.zip" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create zip
+        run: |
+          ZIP="${{ steps.name.outputs.zip }}"
+          zip "$ZIP" REC.html REC-tiny.html README.md
+          echo "Created: $ZIP ($(wc -c < "$ZIP") bytes)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.zip }}
+          path: ${{ steps.name.outputs.zip }}
+          retention-days: 30
+
+  # ── 3. GitHub Release (tags only) ──────────────────────────────────────────
+  release:
+    name: GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.package.outputs.zip_name }}
+
+      - name: Extract changelog for this tag
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Pull the block between this tag heading and the next in README
+          NOTES=$(awk "/^## \[?${TAG}\]?/{found=1; next} found && /^## /{exit} found{print}" README.md)
+          if [ -z "$NOTES" ]; then NOTES="See README for details."; fi
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES"    >> "$GITHUB_OUTPUT"
+          echo "EOF"       >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: REC ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.notes }}
+          files: ${{ needs.package.outputs.zip_name }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
