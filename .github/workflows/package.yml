@@ -39,9 +39,14 @@ jobs:
 
       - name: REC-tiny MIME priority order (mp4 before webm)
         run: |
-          # avc1 must appear before vp9 in the codec selection array
-          AWK_RESULT=$(awk '/avc1/{a=NR} /vp9/{b=NR} END{if(a && b && a<b) print "ok"; else print "fail"}' REC-tiny.html)
-          [ "$AWK_RESULT" = "ok" ] && echo "✓ MIME order correct" || { echo "✗ MIME order wrong"; exit 1; }
+          # avc1 must appear at a lower character offset than vp9 across the whole file
+          python3 -c "
+          c=open('REC-tiny.html').read()
+          a,v=c.find('avc1'),c.find('vp9')
+          ok=0<a<v
+          print('✓ MIME order correct (avc1 @%d, vp9 @%d)'%(a,v) if ok else '✗ MIME order wrong (avc1 @%d, vp9 @%d)'%(a,v))
+          exit(0 if ok else 1)
+          "
 
       - name: REC.html required element IDs
         run: |
