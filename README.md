@@ -313,3 +313,9 @@ python3 -m http.server 8080
 
 - Full: `http://localhost:8080/REC.html`
 - Tiny: `http://localhost:8080/REC-tiny.html`
+
+## Licence
+
+MIT © 2026 [InfinityHack3r](https://github.com/InfinityHack3r)
+
+See [LICENSE](LICENSE) for the full text.
