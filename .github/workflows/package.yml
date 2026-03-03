@@ -71,6 +71,154 @@ jobs:
           grep -q "REC-tiny.html" README.md && echo "✓ README mentions REC-tiny.html" || { echo "✗ README missing REC-tiny.html"; exit 1; }
           grep -q "REC.html"      README.md && echo "✓ README mentions REC.html"      || { echo "✗ README missing REC.html"; exit 1; }
 
+      - name: Generate SBOM report
+        run: |
+          python3 - <<'EOF'
+          import json, datetime
+
+          sbom = json.load(open("sbom.spdx.json"))
+          packages = sbom.get("packages", [])
+          root = next((p for p in packages if p["SPDXID"] == "SPDXRef-Package-REC"), packages[0] if packages else {})
+          deps = [p for p in packages if p["SPDXID"] != root.get("SPDXID")]
+
+          def purl(pkg):
+              for ref in pkg.get("externalRefs", []):
+                  if ref.get("referenceType") == "purl":
+                      return ref["referenceLocator"]
+              return "?"
+
+          lines = []
+          lines.append("# SBOM Report")
+          lines.append("")
+          lines.append(f"**Generated:** {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+          lines.append(f"**Format:** SPDX {sbom.get('spdxVersion', '?')}")
+          lines.append(f"**Namespace:** {sbom.get('documentNamespace', '?')}")
+          lines.append("")
+          lines.append("## Project")
+          lines.append("| Field | Value |")
+          lines.append("|---|---|")
+          lines.append(f"| Name | {root.get('name', '?')} |")
+          lines.append(f"| Version | {root.get('versionInfo', '?')} |")
+          lines.append(f"| License | {root.get('licenseDeclared', '?')} |")
+          lines.append(f"| PURL | `{purl(root)}` |")
+          lines.append("")
+          lines.append(f"## Components ({len(deps)})")
+          lines.append("")
+          lines.append("| Name | Version | License | PURL |")
+          lines.append("|---|---|---|---|")
+          for c in deps:
+              lines.append(
+                  f"| {c.get('name','?')} "
+                  f"| {c.get('versionInfo','?')} "
+                  f"| {c.get('licenseDeclared','?')} "
+                  f"| `{purl(c)}` |"
+              )
+          lines.append("")
+          lines.append("## Relationships")
+          lines.append("")
+          for rel in sbom.get("relationships", []):
+              if rel.get("spdxElementId") == root.get("SPDXID"):
+                  lines.append(f"- `{rel['spdxElementId']}` **{rel['relationshipType']}** `{rel['relatedSpdxElement']}`")
+          lines.append("")
+
+          report = "\n".join(lines)
+          open("sbom-report.md", "w").write(report)
+          print(report)
+          EOF
+
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan SBOM for vulnerabilities (Trivy)
+        run: |
+          trivy sbom sbom.spdx.json \
+            --format table \
+            --exit-code 1 \
+            --severity CRITICAL
+
+      - name: Scan for vulnerabilities — save JSON for report
+        if: always()
+        run: |
+          trivy sbom sbom.spdx.json \
+            --format json \
+            --output trivy-results.json \
+            --exit-code 0 \
+            --severity CRITICAL,HIGH,MEDIUM,LOW
+
+      - name: Generate vulnerability report
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import json, datetime, os
+
+          lines = []
+          lines.append("# Vulnerability Report")
+          lines.append("")
+          lines.append(f"**Generated:** {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+          lines.append(f"**Scanner:** Trivy (Aqua Security)")
+          lines.append(f"**Input:** sbom.spdx.json (SPDX)")
+          lines.append("")
+
+          if not os.path.exists("trivy-results.json"):
+              lines.append("_Trivy results not found — scanner may have failed to run._")
+          else:
+              data = json.load(open("trivy-results.json"))
+              results = data.get("Results", [])
+              all_vulns = [v for r in results for v in r.get("Vulnerabilities") or []]
+
+              lines.append(f"**Total findings:** {len(all_vulns)}")
+              lines.append("")
+
+              if not all_vulns:
+                  lines.append("✅ **No vulnerabilities found.**")
+              else:
+                  severities = {}
+                  for v in all_vulns:
+                      sev = v.get("Severity", "UNKNOWN")
+                      severities[sev] = severities.get(sev, 0) + 1
+
+                  lines.append("## Summary")
+                  lines.append("")
+                  lines.append("| Severity | Count |")
+                  lines.append("|---|---|")
+                  for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]:
+                      if sev in severities:
+                          lines.append(f"| {sev} | {severities[sev]} |")
+                  lines.append("")
+
+                  lines.append("## Findings")
+                  lines.append("")
+                  lines.append("| CVE | Severity | Package | Version | Fixed In |")
+                  lines.append("|---|---|---|---|---|")
+                  order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
+                  for v in sorted(all_vulns, key=lambda x: order.index(x.get("Severity", "UNKNOWN"))):
+                      cve_id = v.get("VulnerabilityID", "?")
+                      lines.append(
+                          f"| [{cve_id}](https://nvd.nist.gov/vuln/detail/{cve_id}) "
+                          f"| {v.get('Severity','?')} "
+                          f"| {v.get('PkgName','?')} "
+                          f"| {v.get('InstalledVersion','?')} "
+                          f"| {v.get('FixedVersion') or 'none'} |"
+                      )
+
+          lines.append("")
+          report = "\n".join(lines)
+          open("vuln-report.md", "w").write(report)
+          print(report)
+          EOF
+
+      - name: Upload SBOM report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-report
+          path: |
+            sbom.spdx.json
+            sbom-report.md
+            trivy-results.json
+            vuln-report.md
+          retention-days: 90
+
   # ── 2. Package ─────────────────────────────────────────────────────────────
   package:
     name: Build zip
@@ -95,7 +243,7 @@ jobs:
       - name: Create zip
         run: |
           ZIP="${{ steps.name.outputs.zip }}"
-          zip "$ZIP" REC.html REC-tiny.html README.md
+          zip "$ZIP" REC.html REC-tiny.html README.md sbom.spdx.json
           echo "Created: $ZIP ($(wc -c < "$ZIP") bytes)"
 
       - name: Upload artifact
@@ -138,6 +286,8 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: REC ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.notes }}
-          files: ${{ needs.package.outputs.zip_name }}
+          files: |
+            ${{ needs.package.outputs.zip_name }}
+            sbom.spdx.json
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
