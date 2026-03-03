@@ -9,6 +9,13 @@ Two versions are included:
 | `REC.html` | Full | You want overlays, audio meters, device selection, recordings list, and Save to Disk |
 | `REC-tiny.html` | ~16 KB | You want a minimal, dependency-free drop-in with no extras |
 
+## Pages
+
+Hosted on GitHub Pages, automatically deployed on every push to `main`:
+
+- **Full:** https://infinityhack3r.github.io/REC/REC.html
+- **Tiny:** https://infinityhack3r.github.io/REC/REC-tiny.html
+
 ---
 
 ## REC-tiny
