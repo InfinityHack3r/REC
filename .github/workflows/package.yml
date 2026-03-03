@@ -126,25 +126,24 @@ jobs:
           print(report)
           EOF
 
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
       - name: Scan SBOM for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          scan-type: sbom
-          scan-ref: sbom.spdx.json
-          format: table
-          exit-code: "1"
-          severity: CRITICAL
+        run: |
+          trivy sbom sbom.spdx.json \
+            --format table \
+            --exit-code 1 \
+            --severity CRITICAL
 
       - name: Scan for vulnerabilities — save JSON for report
         if: always()
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          scan-type: sbom
-          scan-ref: sbom.spdx.json
-          format: json
-          output: trivy-results.json
-          exit-code: "0"
-          severity: CRITICAL,HIGH,MEDIUM,LOW
+        run: |
+          trivy sbom sbom.spdx.json \
+            --format json \
+            --output trivy-results.json \
+            --exit-code 0 \
+            --severity CRITICAL,HIGH,MEDIUM,LOW
 
       - name: Generate vulnerability report
         if: always()
